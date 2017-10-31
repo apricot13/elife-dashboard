@@ -290,7 +290,7 @@ module.exports = function (config) {
      */
     function renderScheduleButton() {
         // schedule button
-        var buttons = data.template.buttonsScheduleTemplate({article: data.article});
+        var buttons = data.template.buttonsScheduleTemplate({article: data.article,  currentArticle: data.currentArticle});
         return buttons;
     }
 
