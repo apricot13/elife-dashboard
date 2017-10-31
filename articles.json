@@ -70,7 +70,8 @@
       "status": "VOR",
       "title": "This is the v2 title",
       "version": 2,
-      "preview-link": "http://www.somedrupalsite/1/1/00288.html"
+      "preview-link": "http://www.somedrupalsite/1/1/00288.html",
+      "expected-publication-date": 1508498801
     },{
       "corresponding-authors": "These are the v2 authors",
       "doi": "10.7554/elife.005582",

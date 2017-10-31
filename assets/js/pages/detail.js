@@ -249,6 +249,7 @@ module.exports = function (config) {
      * Determine which action buttons to show for this page
      */
     function renderDetailActions() {
+        
         if (!_.isEmpty(data.scheduleStatus)) {
             if (data.scheduleStatus.scheduled > 0) {
                 $('.article-detail-actions', '#article').empty().html(data.template.buttonsReScheduleTemplate({
@@ -258,7 +259,7 @@ module.exports = function (config) {
                 }));
                 $('.article-detail-scheduled', '#article').empty().html(data.template.articlesScheduledForTemplate({scheduleStatus: data.scheduleStatus}));
             } else {
-                var buttons = data.template.buttonsScheduleTemplate({article: data.article}) + data.template.buttonsPublishTemplate({
+                var buttons = data.template.buttonsScheduleTemplate({article: data.article, currentArticle: data.currentArticle}) + data.template.buttonsPublishTemplate({
                         article: data.article,
                         currentArticle: data.currentArticle,
                         currentEvents: data.currentEvents,
