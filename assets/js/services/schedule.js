@@ -29,8 +29,10 @@ module.exports = function (config) {
     // Variables
     {
         var data = {};
+        data.article = [];
         data.articleId = null;
         data.articleScheduled = null;
+        data.articleExpectedPublicationDate = null;
         data.scheduleData = {};
         data.scheduleDate = null;
         data.scheduleTime = null;
@@ -38,6 +40,7 @@ module.exports = function (config) {
         data.scheduleActionType = null;
         data.isScheduling = false;
         data.isAllScheduled = false;
+        data.queryParams = {};
     }
 
     {
@@ -76,6 +79,7 @@ module.exports = function (config) {
         $(document).on('change mousewheel input', '.hourpicker, .minutepicker', loopPicker.bind(this));
         $(document).on('change', '.hourpicker, .minutepicker', padInput.bind(this));
         $(document).on('change blur keyup', '.schedule-field', validateForm.bind(this));
+        $(document).on('click', '#schedule-modal #find-article-action', getArticle.bind(this));
     }
 
     /**
@@ -84,6 +88,16 @@ module.exports = function (config) {
     function initDateTime() {
         var yesterday = new Date((new Date()).valueOf() - 1000 * 60 * 60 * 24);
 
+        var exemptDate = checkForExpectedPublicationDate();
+
+        var datePickerInit = {
+            format: 'mmmm d, yyyy',
+            formatSubmit: 'dd/mm/yyyy',
+            onStart: datePickerOnStart,
+            onSet: datePickerOnSet
+        };
+
+
         function datePickerOnStart() {
             var day = moment.unix(data.articleScheduled).format('DD');
             var month = moment.unix(data.articleScheduled).format('MM');
@@ -91,6 +105,11 @@ module.exports = function (config) {
             month--; //only month for dates are zero indexed
             if (data.articleScheduled) {
                 this.set('select', new Date(year, month, day));
+            }
+
+
+            if (exemptDate) {
+                this.set('select', exemptDate);
             }
         }
 
@@ -105,12 +124,15 @@ module.exports = function (config) {
             validateForm();
         }
 
-        $('.datepicker').pickadate({
-            format: 'mmmm d, yyyy',
-            formatSubmit: 'dd/mm/yyyy',
-            onStart: datePickerOnStart,
-            onSet: datePickerOnSet
-        });
+        if (exemptDate) {
+            datePickerInit["disable"] = [
+                true,
+                exemptDate
+            ];
+        }
+
+
+        data.datepicker = $('.datepicker').pickadate(datePickerInit);
 
         // if we're rescheduling we will have an existing time date
         if (data.articleScheduled) {
@@ -125,6 +147,22 @@ module.exports = function (config) {
     }
 
     /**
+     * Check for expected publication date
+     * @returns {[boolean,null]}
+     */
+    function checkForExpectedPublicationDate() {
+        if (data.articleExpectedPublicationDate > 0) {
+            var exemptDay = moment.unix(data.articleExpectedPublicationDate).format('DD');
+            var exemptMonth = moment.unix(data.articleExpectedPublicationDate).format('MM');
+            var exemptYear = moment.unix(data.articleExpectedPublicationDate).format('YYYY');
+            exemptMonth--; //only month for dates are zero indexed
+            var exemptDate = new Date(exemptYear, exemptMonth, exemptDay);
+            return exemptDate;
+        }
+        return false;
+    }
+
+    /**
      * Validate the form
      * @returns {boolean}
      */
@@ -134,8 +172,8 @@ module.exports = function (config) {
 
         // Check for null fields
         var fields = $('[data-required]', '#schedule-modal');
-        errors += validate.fieldRequired(fields,errors);
-
+        errors += validate.fieldRequired(fields, errors);
+        
         // check each numeric field is numeric
         var numericfields = $('[data-validation="numeric"]', '#schedule-modal');
         errors += validate.fieldNumeric(numericfields, errors);
@@ -156,6 +194,8 @@ module.exports = function (config) {
             errors--;
         }
 
+        
+        
         if (errors == 0) {
             $('#schedule-action', '#schedule-modal').prop('disabled', false).removeClass('disabled');
             return true;
@@ -178,6 +218,7 @@ module.exports = function (config) {
         var date = $('.datepicker', '#schedule-modal').val();
         var hour = $elHour.val();
         var minute = $elMinute.val();
+        
         if (_.isEmpty(date) || _.isEmpty(hour) || _.isEmpty(minute)) {
             // no hour minute or date
             return false;
@@ -222,8 +263,10 @@ module.exports = function (config) {
         setModalTitle($(e.currentTarget));
         var articleId = ($(e.currentTarget).attr('data-article-id')) ? $(e.currentTarget).attr('data-article-id') : false;
         var articleScheduled = ($(e.currentTarget).attr('data-scheduled')) ? $(e.currentTarget).attr('data-scheduled') : false;
+        var articleExpectedPublicationDate = ($(e.currentTarget).attr('data-expected-publication-date')) ? $(e.currentTarget).attr('data-expected-publication-date') : false;
         data.articleId = articleId;
         data.articleScheduled = articleScheduled;
+        data.articleExpectedPublicationDate = articleExpectedPublicationDate;
         data.scheduleActionType = $(e.currentTarget).attr('data-action-type');
 
         var action = {actionType: 'schedule', includeArticleId: false};
@@ -233,12 +276,18 @@ module.exports = function (config) {
             action.actionType = 'schedule';
         }
 
+        action.showScheduleDatepicker = true;
         if (data.scheduleActionType === 'future-schedule') {
             action.showArticleIdField = true;
+            action.showScheduleDatepicker = false;
         }
 
         $('#schedule-modal .modal-body').html(data.template.modalBody(action));
         $('#schedule-modal .modal-footer').html(data.template.modalFooter(action));
+
+        if (!action.showScheduleDatepicker) {
+            $('#schedule-modal .schedule-modal-datepicker').hide();
+        }
 
     }
 
@@ -377,7 +426,7 @@ module.exports = function (config) {
         // we're on the scheduled page and there is a scheduled date (ie not cancellation)
         // and calendar view is active and the scheduledDateTime is not on the calendar
         // force calendar to go to the new scheduled date
-        if ($('.scheduled-page').length > 0 && data.scheduleDateTime && $('.scheduled-page').hasClass('calendar-view') &&  !(moment(data.scheduleDateTime).isAfter($('#schedule-calendar').fullCalendar('getView').start) && moment(data.scheduleDateTime).isBefore($('#schedule-calendar').fullCalendar('getView').end))) {
+        if ($('.scheduled-page').length > 0 && data.scheduleDateTime && $('.scheduled-page').hasClass('calendar-view') && !(moment(data.scheduleDateTime).isAfter($('#schedule-calendar').fullCalendar('getView').start) && moment(data.scheduleDateTime).isBefore($('#schedule-calendar').fullCalendar('getView').end))) {
             $('#schedule-calendar').fullCalendar('render'); // render then go to the date incase its in the current month
             $('#schedule-calendar').fullCalendar('gotoDate', data.scheduleDateTime);
         } else {
@@ -430,7 +479,134 @@ module.exports = function (config) {
         }
     }
 
-    var sch =  {
+
+    /**
+     * Get article
+     */
+    function getArticle() {
+        data.queryParams.articleId = $('#schedule-id', '#schedule-modal').val();
+        if (data.queryParams.articleId) {
+            sch.fetchArticle(sch.getArticleSuccess, sch.getArticleError);
+        }
+    }
+
+    /**
+     * Fetch article information
+     *
+     * @param successCallback
+     * @param errorCallback
+     * @returns {*}
+     */
+    function fetchArticle(successCallback, errorCallback) {
+        return $.ajax({
+            url: config.api.article + '/' + data.queryParams.articleId,
+            cache: false,
+            dataType: 'json',
+            success: function (returnedData) {
+                successCallback(returnedData);
+            },
+            error: function (returnedData) {
+                errorCallback(returnedData);
+            }
+        });
+    }
+
+
+    /**
+     * Success callback for fetching article information
+     * @param data
+     */
+    function getArticleSuccess(returnedData) {
+        data.article = returnedData;
+        sch.setLatestArticle();
+        data.currentArticle = getCurrentArticle();
+        data.currentEvents = getCurrentRun();
+        if (data.currentArticle["expected-publication-date"] > 0) {
+            data.articleExpectedPublicationDate = data.currentArticle["expected-publication-date"];
+        }
+        var picker = data.datepicker.pickadate('picker');
+        var exemptDate = checkForExpectedPublicationDate();
+        picker.set('disable', true);
+        picker.set('disable', [
+            true,
+            exemptDate
+        ]);
+        picker.set('select', exemptDate);
+        $('#schedule-modal .schedule-modal-datepicker').show();
+    }
+
+    /**
+     * Error callback for fetching article information
+     *
+     * @param data
+     */
+    function getArticleError(returnedData) {
+        log.error(config.errors.en.type.api + ': ' + config.api.article + '/' + data.queryParams.articleId);
+        log.info(returnedData);
+        var errorInfo = utils.formatErrorInformation(returnedData);
+        errorInfo.errorType = null;
+        errorInfo.ref = 'getArticleError';
+        errorInfo.type = config.errors.en.type.api;
+        $('.modal-body', '#schedule-modal').empty().html(data.template.errorMessage(errorInfo));
+        $('.modal-body', '#schedule-modal').append(data.template.errorDetail(errorInfo));
+    }
+
+    /**
+     * Set latest article
+     */
+    function setLatestArticle() {
+        if (!data.queryParams.versionNumber) {
+            data.queryParams.versionNumber = utils.findLastKey(data.article.versions);
+        }
+
+        if (!data.queryParams.runId) {
+            if (_.has(data.article.versions, data.queryParams.versionNumber)) {
+                var lastKey = utils.findLastKey(data.article.versions[data.queryParams.versionNumber].runs);
+                var runId = data.article.versions[data.queryParams.versionNumber].runs[lastKey]['run-id'];
+                data.queryParams.runId = runId;
+            } else {
+                data.queryParams.runId = null;
+            }
+        }
+
+    }
+
+
+    /**
+     * Find the current article from stored data
+     * @returns {*}
+     */
+    function getCurrentArticle() {
+        if (_.has(data.article.versions, data.queryParams.versionNumber)) {
+            return data.article.versions[data.queryParams.versionNumber].details;
+        } else {
+            data.errors = {
+                status: config.errors.en.type.application,
+                statusText: config.errors.en.incorrectInformation,
+                message: config.errors.en.noVersions + ' (' + data.queryParams.versionNumber + ')'
+            };
+            return false;
+        }
+    }
+
+    /**
+     * Find the current list of events from stored data
+     * @returns {*}
+     */
+    function getCurrentRun() {
+        if (_.has(data.article.versions, data.queryParams.versionNumber) && _.findWhere(data.article.versions[data.queryParams.versionNumber].runs, {'run-id': data.queryParams.runId})) {
+            return _.findWhere(data.article.versions[data.queryParams.versionNumber].runs, {'run-id': data.queryParams.runId});
+        } else {
+            data.errors = {
+                status: config.errors.en.type.application,
+                statusText: config.errors.en.incorrectInformation,
+                message: config.errors.en.noRuns + ' (' + data.queryParams.runId + ')'
+            };
+            return false;
+        }
+    }
+
+    var sch = {
         init: init,
         performSchedule: performSchedule,
         setParameters: setParameters,
@@ -444,7 +620,12 @@ module.exports = function (config) {
         checkScheduledTimeValid: checkScheduledTimeValid,
         scheduleArticlePublication: scheduleArticlePublication,
         scheduleArticlePublicationSuccess: scheduleArticlePublicationSuccess,
-        scheduleArticlePublicationError: scheduleArticlePublicationError
+        scheduleArticlePublicationError: scheduleArticlePublicationError,
+        getArticle: getArticle,
+        fetchArticle: fetchArticle,
+        getArticleSuccess: getArticleSuccess,
+        getArticleError: getArticleError,
+        setLatestArticle: setLatestArticle
     };
 
     return sch;

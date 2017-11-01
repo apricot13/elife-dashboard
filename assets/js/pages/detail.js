@@ -313,6 +313,7 @@ module.exports = function (config) {
         
         // if we're calling after fetching the scheduled status
         // show reschedule buttons - schedule trumps everything
+
         if (!_.isEmpty(data.scheduleStatus)) {
             if (data.scheduleStatus.scheduled > 0) {
                buttons += detail.renderRescheduleCancelButtons();
